@@ -1,0 +1,92 @@
+# ==========================
+# 1) تثبيت Chrome + Chromedriver + Selenium
+# ==========================
+!apt-get update -q
+!apt-get install -y wget unzip
+!wget -q https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
+!apt-get install -y ./google-chrome-stable_current_amd64.deb
+
+# تنزيل chromedriver المتوافق مع نسخة Chrome
+!CHROME_VERSION=$(google-chrome --version | cut -d ' ' -f3 | cut -d '.' -f1)
+!wget -q "https://chromedriver.storage.googleapis.com/LATEST_RELEASE_${CHROME_VERSION}" -O LATEST_RELEASE
+!CHROMEDRIVER_VERSION=$(cat LATEST_RELEASE)
+!wget -q "https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip"
+!unzip -o chromedriver_linux64.zip -d /usr/bin/
+!chmod +x /usr/bin/chromedriver
+
+!pip install selenium
+
+# ==========================
+# 2) كود البوت
+# ==========================
+import time
+from selenium import webdriver
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+
+class MartingaleBotWeb:
+    def __init__(self, url, base_bet=1000, balance=50000):
+        self.base_bet = base_bet
+        self.current_bet = base_bet
+        self.balance = balance
+
+        # إعداد Chrome headless في Colab
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+
+        self.driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"),
+                                       options=chrome_options)
+        self.driver.get(url)
+        time.sleep(3)
+
+    def click_repeat(self):
+        # عدّل selector حسب زر "كرر" في موقعك
+        button = self.driver.find_element(By.ID, "repeat-button")
+        button.click()
+        print("🔄 ضغط على زر تكرار")
+        time.sleep(2)
+
+    def get_result(self):
+        # عدّل selector حسب عنصر النتيجة في موقعك
+        result_element = self.driver.find_element(By.ID, "result")
+        result_text = result_element.text.lower()
+
+        if "win" in result_text:
+            return True
+        elif "lose" in result_text:
+            return False
+        else:
+            return None
+
+    def play_round(self):
+        self.click_repeat()
+        time.sleep(3)
+
+        result = self.get_result()
+        if result is None:
+            print("⚠️ لم يتم التعرف على النتيجة")
+            return
+
+        if result:  # فوز
+            self.balance += self.current_bet
+            print(f"✅ فوز +{self.current_bet} | الرصيد = {self.balance}")
+            self.current_bet = self.base_bet
+        else:  # خسارة
+            self.balance -= self.current_bet
+            print(f"❌ خسارة -{self.current_bet} | الرصيد = {self.balance}")
+            self.current_bet *= 2
+
+    def run(self, rounds=10):
+        for i in range(rounds):
+            print(f"\n--- الجولة {i+1} ---")
+            self.play_round()
+            time.sleep(2)
+
+# ==========================
+# 3) مثال تشغيل
+# ==========================
+bot = MartingaleBotWeb("https://example.com/game", base_bet=1000, balance=50000)
+bot.run(10)
